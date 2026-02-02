@@ -1,12 +1,105 @@
+from __future__ import annotations
+
 import requests
 import streamlit as st
 
 
-st.set_page_config(page_title="심리테스트 영화 추천", page_icon="🎬")
-st.title("🎬 심리테스트 영화 추천")
-st.write("몇 가지 질문에 답하면 당신의 취향에 맞는 영화를 추천해드려요!")
+st.set_page_config(
+    page_title="심리테스트 영화 추천",
+    page_icon="🎬",
+    layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    .app-header {
+        background: linear-gradient(90deg, #1f1c2c 0%, #928DAB 100%);
+        padding: 2.5rem 2rem;
+        border-radius: 24px;
+        color: white;
+        margin-bottom: 2rem;
+    }
+    .app-header h1 {
+        margin: 0;
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+    .app-header p {
+        margin-top: 0.5rem;
+        font-size: 1.05rem;
+        opacity: 0.9;
+    }
+    .pill {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        background-color: rgba(255, 255, 255, 0.18);
+        font-size: 0.85rem;
+        margin-right: 0.5rem;
+    }
+    .card {
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
+    .movie-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .movie-meta {
+        color: #5c677d;
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+    }
+    .reason {
+        background: #f0f4ff;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        color: #2b3a67;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .section-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+    .question-card {
+        border: 1px solid #edf0f6;
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+        background: #fbfcff;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="app-header">
+        <span class="pill">TMDB 연동</span>
+        <span class="pill">심리테스트 기반</span>
+        <h1>🎬 당신의 취향을 읽는 영화 추천</h1>
+        <p>간단한 질문에 답하면, 검증된 인기작 5편을 바로 추천해드려요.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 tmdb_api_key = st.sidebar.text_input("TMDB API Key", type="password")
+st.sidebar.markdown(
+    """
+    **API 안내**
+    - TMDB API Key를 입력하면 추천 결과를 확인할 수 있어요.
+    - 입력한 키는 저장되지 않습니다.
+    """
+)
 
 genre_mapping = {
     "액션": 28,
@@ -87,7 +180,8 @@ def fetch_movies(api_key: str, genre_id: int) -> list[dict]:
         "api_key": api_key,
         "with_genres": genre_id,
         "language": "ko-KR",
-        "sort_by": "popularity.desc",
+        "sort_by": "vote_count.desc",
+        "vote_count.gte": 500,
     }
     response = requests.get(url, params=params, timeout=10)
     response.raise_for_status()
@@ -95,17 +189,43 @@ def fetch_movies(api_key: str, genre_id: int) -> list[dict]:
     return data.get("results", [])[:5]
 
 
-with st.form("mood_test"):
-    st.subheader("📝 심리테스트 질문")
-    answers = []
-    for idx, question in enumerate(questions, start=1):
-        answer = st.radio(
-            f"{idx}. {question['question']}",
-            list(question["options"].keys()),
-            key=f"question_{idx}",
-        )
-        answers.append(answer)
-    submitted = st.form_submit_button("결과 보기")
+left, right = st.columns([1.2, 1])
+
+with left:
+    st.markdown('<div class="section-title">📝 심리테스트 질문</div>', unsafe_allow_html=True)
+    answers: list[str] = []
+    with st.form("mood_test"):
+        for idx, question in enumerate(questions, start=1):
+            st.markdown('<div class="question-card">', unsafe_allow_html=True)
+            answer = st.radio(
+                f"{idx}. {question['question']}",
+                list(question["options"].keys()),
+                key=f"question_{idx}",
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+            answers.append(answer)
+        submitted = st.form_submit_button("결과 보기")
+
+with right:
+    st.markdown('<div class="section-title">✨ 추천 흐름</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="card">
+            <p><strong>1.</strong> 질문에 답하기</p>
+            <p><strong>2.</strong> 취향 장르 분석</p>
+            <p><strong>3.</strong> TMDB 인기작 5편 추천</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="card">
+            <p><strong>Tip.</strong> 추천 결과는 투표 수가 충분한 작품 위주로 선별돼요.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if submitted:
     if not tmdb_api_key:
@@ -122,6 +242,8 @@ if submitted:
     selected_genre = max(genre_scores, key=genre_scores.get)
     genre_id = genre_mapping[selected_genre]
 
+    st.markdown("---")
+    st.markdown('<div class="section-title">🎯 결과 요약</div>', unsafe_allow_html=True)
     st.success(f"당신에게 어울리는 장르는 **{selected_genre}** 입니다!")
     st.caption(get_recommendation_reason(selected_genre, top_choices))
 
@@ -134,7 +256,7 @@ if submitted:
     if not movies:
         st.info("추천할 영화를 찾지 못했어요. 다른 장르로 다시 시도해보세요.")
     else:
-        st.subheader("🎞️ 추천 영화 5편")
+        st.markdown('<div class="section-title">🍿 추천 영화 5편</div>', unsafe_allow_html=True)
         for movie in movies:
             poster_path = movie.get("poster_path")
             poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
@@ -142,6 +264,7 @@ if submitted:
             rating = movie.get("vote_average", "N/A")
             overview = movie.get("overview", "줄거리 정보가 없습니다.")
 
+            st.markdown('<div class="card">', unsafe_allow_html=True)
             cols = st.columns([1, 3])
             with cols[0]:
                 if poster_url:
@@ -149,7 +272,11 @@ if submitted:
                 else:
                     st.write("포스터 없음")
             with cols[1]:
-                st.markdown(f"### {title}")
-                st.write(f"평점: {rating}")
+                st.markdown(f'<div class="movie-title">{title}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="movie-meta">평점: {rating}</div>', unsafe_allow_html=True)
                 st.write(overview)
-                st.write("이 영화를 추천하는 이유: 선택한 장르 취향과 잘 맞는 인기작이에요.")
+                st.markdown(
+                    '<div class="reason">이 영화를 추천하는 이유: 대중성과 평점이 모두 검증된 작품이에요.</div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
